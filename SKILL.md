@@ -1,123 +1,230 @@
 ---
-name: new-feature-page
-description: Scaffold a new feature page in Agent Studio UI - page folder, types, react-query service, lazy route with pageLayout handle, and optional sidebar link. Use when asked to add a new page, screen, route, or section to the studio UI (e.g. "add an X page", "create a new route for Y").
+name: pdf-summarizer
+description: Knowledge and utilities for extracting, validating, and summarizing PDF documents. Use when users ask to summarize a PDF, create executive summaries, extract key points, generate section-wise summaries, or identify action items from PDF content.
+license: Complete terms in LICENSE.txt
 ---
 
-# New feature page
+# PDF Summarizer
 
-Adds a feature page that matches the conventions already used in `src/pages/*`.
-Reference implementation: `src/pages/audit-logs/` (page + types + service + components).
+A toolkit providing utilities and guidance for reliably extracting and summarizing PDF documents.
 
-## Inputs to settle first
+## Supported Tasks
 
-Ask only if the request leaves them genuinely ambiguous; otherwise infer:
+Use this skill when the user asks to:
+- Summarize an entire PDF.
+- Create a short, medium, or detailed summary.
+- Produce an executive summary.
+- Summarize page-by-page or section-by-section.
+- Extract key points, findings, decisions, risks, or action items.
+- Focus the summary on specific topics or keywords.
+- Validate whether a PDF contains usable extractable text.
 
-- **slug** - kebab-case, used for both the folder (`src/pages/<slug>/`) and the route path.
-- **title / subtitle** - shown by the shared page layout.
-- **backend** - which service the data comes from and whether it uses the default
-  `src/lib/axios` instance (`{BASE_URL}/v3`) or another base URL from `src/lib/constants.ts`.
-- **sidebar** - whether the page gets a nav entry in `src/data/sidelinks.tsx`.
+## Core Principles
 
-## Steps
+### Stay grounded in the PDF
+Summaries must be based on the content actually present in the document.
+- Do not invent facts, numbers, names, dates, or conclusions.
+- Preserve important terminology used in the source.
+- Clearly state when requested information is not present in the PDF.
+- Distinguish source content from any additional interpretation.
 
-### 1. Create the page folder
+### Preserve important details
+Prioritize:
+- Main purpose and conclusions.
+- Important facts, metrics, dates, names, and requirements.
+- Decisions, risks, dependencies, and action items.
+- Repeated themes and high-impact findings.
 
-```
-src/pages/<slug>/
-  index.tsx              # default-exported page component
-  types.ts               # request/response + filter types
-  <slug>.service.ts      # react-query hooks wrapping axios
-  components/            # only if the page needs more than one component
-```
+Do not over-focus on boilerplate, repeated headers/footers, or low-value text.
 
-`index.tsx` must have a **default export** - the router imports it as `.default`.
+### Handle long PDFs in chunks
+For large PDFs:
+1. Extract page text.
+2. Split the document into logical chunks or page ranges.
+3. Summarize each chunk.
+4. Merge chunk summaries into one coherent final summary.
+5. Remove duplicates while preserving important details.
 
-### 2. Types (`types.ts`)
+## Recommended Summary Formats
 
-Declare the API response shapes and any filter object. Do not use `any` in
-exported types; the codebase is strictly typed via `src/lib/types.ts`.
+### Quick Summary
+Best for a fast overview.
 
-### 3. Service (`<slug>.service.ts`)
-
-One exported hook per endpoint, wrapping `@tanstack/react-query` over the shared
-axios instance. Follow the house shape:
-
-```ts
-import { useQuery } from "@tanstack/react-query";
-import axios from "@/lib/axios";
-import { ThingListResponse, ThingFilters } from "./types";
-
-export const useThings = (
-  apiKey: string,
-  filters: ThingFilters = {},
-  enabled = true,
-) => {
-  const { data, isLoading, error, refetch, isRefetching } = useQuery({
-    queryKey: ["things", filters],
-    queryFn: () =>
-      axios.get<ThingListResponse>("/things/", {
-        headers: { "x-api-key": apiKey },
-        params: { ...filters, limit: filters.limit ?? 100, offset: filters.offset ?? 0 },
-      }),
-    select: (res) => res.data,
-    retry: false,
-    refetchOnWindowFocus: false,
-    enabled: !!apiKey && enabled,
-  });
-
-  return { data, isLoading, error, refetch, isRefetching };
-};
+```text
+Summary
+- Main point 1
+- Main point 2
+- Main point 3
 ```
 
-Notes:
-- The api key comes from the global store (`useStore(s => s.apiKeys)[0].api_key`);
-  pass it into the hook rather than reading the store inside the service.
-- Never add bespoke error toasts for ordinary failures - the axios interceptor in
-  `src/lib/axios.ts` already surfaces them.
-- Mutations use `useMutation` + `queryClient.invalidateQueries` on the same key.
+### Executive Summary
+Best for business or stakeholder documents.
 
-### 4. Register the route (`src/router.tsx`)
+```text
+Executive Summary
+<2-5 concise paragraphs>
 
-Add a lazy child under the authenticated `AppShell` branch, next to related pages:
+Key Points
+- ...
 
-```tsx
-{
-  path: "<slug>",
-  handle: {
-    pageLayout: {
-      title: "<Title>",
-      subtitle: "<One-line description>",
-      showBackButton: true,
-    },
-  },
-  lazy: async () => ({
-    Component: (await import("@/pages/<slug>")).default,
-  }),
-},
+Risks / Issues
+- ...
+
+Action Items
+- ...
 ```
 
-- Dev-only pages go behind the `isDevEnv` guard already used in the file.
-- Enterprise-only pages go behind `IS_ENTERPRISE_DEPLOYMENT`.
-- Public pages belong under the `/auth` branch instead, with `routeTitle(...)`.
+### Detailed Summary
+Best when the user needs more coverage.
 
-### 5. Sidebar link (optional)
+```text
+Overview
+...
 
-Add an entry to `src/data/sidelinks.tsx` only when the page should be navigable.
-Match the existing permission/flag gating used by neighbouring links - do not
-introduce a new gating mechanism.
+Section-wise Summary
+1. Section name
+   - ...
 
-### 6. UI
+Important Data / Metrics
+- ...
 
-- Use ShadcnUI primitives from `src/components/ui/`. If a needed primitive is
-  missing, pull it via the **shadcn MCP** rather than hand-writing it.
-- Tailwind only, and keep dark-mode classes on anything that sets a colour.
-- Loading and empty states are expected: skeletons from `ui/skeleton`, not spinners.
+Decisions
+- ...
 
-## Verify
+Action Items
+- ...
+```
+
+## Core Workflow
+
+```python
+from core.pdf_extractor import extract_pdf
+from core.summarizer import summarize_text
+from core.output_formatter import format_summary
+from core.validators import validate_pdf
+
+# 1. Validate the PDF
+passes, info = validate_pdf("document.pdf", verbose=True)
+if not passes:
+    raise ValueError(info.get("error", "PDF validation failed"))
+
+# 2. Extract text
+pdf_data = extract_pdf("document.pdf")
+
+# 3. Create a deterministic baseline summary
+summary = summarize_text(
+    pdf_data["text"],
+    max_sentences=10,
+    focus_terms=None,
+)
+
+# 4. Format the result
+output = format_summary(
+    title=pdf_data.get("title") or "PDF Summary",
+    summary=summary,
+    metadata=pdf_data,
+)
+
+print(output)
+```
+
+## Working with Scanned PDFs
+
+This skill extracts embedded PDF text. If a PDF is image-only or scanned and contains little or no extractable text:
+- Report that OCR is required.
+- Do not pretend that blank extraction means the document is empty.
+- If OCR tooling is available in the environment, OCR the relevant pages first and then summarize the OCR output.
+
+## Available Utilities
+
+### PDF Extractor (`core.pdf_extractor`)
+Extracts text and basic metadata from a PDF:
+
+```python
+from core.pdf_extractor import extract_pdf
+
+data = extract_pdf("document.pdf")
+print(data["page_count"])
+print(data["text"])
+```
+
+Optional page selection:
+
+```python
+data = extract_pdf("document.pdf", pages=[1, 2, 5])
+```
+
+Pages are 1-indexed for convenience.
+
+### Summarizer (`core.summarizer`)
+Provides a local extractive summarizer that does not require an API key:
+
+```python
+from core.summarizer import summarize_text
+
+summary = summarize_text(
+    text,
+    max_sentences=8,
+    focus_terms=["revenue", "risk", "timeline"],
+)
+```
+
+The extractive summarizer is useful as a deterministic baseline. When an LLM is available, prefer semantic summarization while following the grounding rules in this skill.
+
+### Output Formatter (`core.output_formatter`)
+Formats summaries into readable Markdown:
+
+```python
+from core.output_formatter import format_summary
+
+markdown = format_summary(
+    title="Quarterly Report Summary",
+    summary=summary,
+    key_points=["Point A", "Point B"],
+    action_items=["Action A"],
+)
+```
+
+### Validators (`core.validators`)
+Checks that a PDF exists, can be opened, has pages, and contains extractable text:
+
+```python
+from core.validators import validate_pdf, is_pdf_ready
+
+passes, info = validate_pdf("document.pdf", verbose=True)
+
+if is_pdf_ready("document.pdf"):
+    print("Ready to summarize")
+```
+
+## Summary Quality Checklist
+
+Before returning a summary, check that:
+- The summary reflects the actual PDF content.
+- Important numbers, dates, names, and decisions are preserved accurately.
+- Repeated content is consolidated.
+- The level of detail matches the user's request.
+- No unsupported claims have been added.
+- Action items are only included when the document actually contains or clearly implies them.
+- Any unreadable, missing, or image-only content is explicitly noted.
+
+## Philosophy
+
+This skill provides:
+- **Knowledge**: A reliable workflow for PDF summarization.
+- **Utilities**: PDF extraction, validation, baseline summarization, and formatting.
+- **Flexibility**: Supports short, detailed, executive, topic-focused, and page-focused summaries.
+
+It does NOT provide:
+- OCR by itself.
+- Guaranteed extraction from encrypted or damaged PDFs.
+- Automatic factual enrichment from the internet.
+- Permission to infer missing content.
+
+Use the PDF as the source of truth and keep summaries concise, accurate, and useful.
+
+## Dependencies
 
 ```bash
-npx tsc --noEmit
+pip install pypdf
 ```
-
-Type check only - do not run a production build. Fix every error introduced by
-the new files before reporting done.
